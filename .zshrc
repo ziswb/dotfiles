@@ -1,5 +1,8 @@
+# Plugins and colorls
 # https://dev.to/abdfnx/oh-my-zsh-powerlevel10k-cool-terminal-1no0
-#
+# git clone https://github.com/zsh-users/zsh-syntax-highlighting.git ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-syntax-highlighting
+# git clone https://github.com/zsh-users/zsh-autosuggestions ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-autosuggestions
+
 # Enable Powerlevel10k instant prompt. Should stay close to the top of ~/.zshrc.
 # Initialization code that may require console input (password prompts, [y/n]
 # confirmations, etc.) must go above this block; everything else may go below.
@@ -16,6 +19,12 @@ fi
 ### MANAGED BY RANCHER DESKTOP START (DO NOT EDIT)
 export PATH="$HOME/.rd/bin:$PATH"
 ### MANAGED BY RANCHER DESKTOP END (DO NOT EDIT)
+
+# The following lines have been added by Docker Desktop to enable Docker CLI completions.
+fpath=($HOME/.docker/completions $fpath)
+autoload -Uz compinit
+compinit
+# End of Docker CLI completions
 
 # For development@work
 export OP_ACCOUNT=ergon.1password.eu
@@ -45,6 +54,9 @@ export PATH="/opt/homebrew/bin:$PATH"
 export PATH="/opt/homebrew/opt/helm@3/bin:$PATH"
 eval "$(/opt/homebrew/bin/brew shellenv)"
 
+# Helm
+[[ ! -f /opt/homebrew/opt/helm@3/share/zsh/site-functions/_helm ]] || source /opt/homebrew/opt/helm@3/share/zsh/site-functions/_helm
+
 # enable direnv
 eval "$(direnv hook zsh)"
 
@@ -65,7 +77,9 @@ export PATH=$PATH:$ANDROID_HOME/tools/bin
 export PATH=$PATH:$ANDROID_HOME/emulator
 
 # gnu bin paths
-export PATH="/opt/homebrew/opt/libpq/bin:$PATH"
+# export PATH="/opt/homebrew/opt/libpq/bin:$PATH"
+alias gzip="/opt/homebrew/bin/gzip"
+export PATH="/opt/homebrew/opt/gnu-tar/libexec/gnubin:$PATH"
 export PATH="/opt/homebrew/opt/grep/libexec/gnubin:$PATH"
 export PATH="/opt/homebrew/opt/gnu-sed/libexec/gnubin:$PATH"
 export PATH="/opt/homebrew/opt/gnu-tar/libexec/gnubin:$PATH"
@@ -76,8 +90,9 @@ export PATH="/opt/homebrew/opt/coreutils/libexec/gnubin:$PATH"
 #fpath=($HOME/.my_zsh_functions "${fpath[@]}" )
 
 # If you come from bash you might have to change your $PATH.
-export PATH=$HOME/bin:/usr/local/bin:$PATH:$HOME/Library/Python/3.9/bin
+export PATH=$HOME/bin:/opt/homebrew/Cellar/python@3.14/3.14.2/bin:$PATH:/usr/local/bin:$HOME/Library/Python/3.9/bin
 
+# Ruby
 if [ -d "/opt/homebrew/opt/ruby/bin" ]; then
   export PATH=/opt/homebrew/opt/ruby/bin:$PATH
   export PATH=`gem environment gemdir`/bin:$PATH
@@ -159,8 +174,8 @@ plugins=(
 	git
 	z
 	macos
-  zsh-syntax-highlighting
-  zsh-autosuggestions
+    zsh-syntax-highlighting
+    zsh-autosuggestions
 )
 
 source $ZSH/oh-my-zsh.sh
@@ -191,10 +206,16 @@ export LANG=en_US.UTF-8
 # alias zshconfig="mate ~/.zshrc"
 # alias ohmyzsh="mate ~/.oh-my-zsh"
 
+export PATH="/usr/local/opt/libpq/bin:$PATH"
+
 # To customize prompt, run `p10k configure` or edit ~/.p10k.zsh.
 [[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh
 
+# atuin
 eval "$(atuin init zsh --disable-up-arrow)"
+
+# Claude Code
+export PATH="$HOME/.local/bin:$PATH"
 
 # source aliases
 source $HOME/.alias
