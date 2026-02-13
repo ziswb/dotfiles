@@ -1,8 +1,6 @@
 alias setJava11="export JAVA_HOME=`/usr/libexec/java_home -v 11` && java -version"
 alias setJava17="export JAVA_HOME=`/usr/libexec/java_home -v 17` && java -version"
 alias setJava21="export JAVA_HOME=`/usr/libexec/java_home -v 21` && java -version"
-
-# experimental
 alias gw="./gradlew"
 alias tf="terraform"
 alias brew_housekeeping="brew update && brew upgrade && brew autoremove && brew cleanup --prune=all"
@@ -25,12 +23,15 @@ fi
 
 # kubernetes
 alias kubectl=kubecolor
+compdef kubecolor=kubectl
 alias k=kubectl
-alias kg='kubectl get'
-alias kd='kubectl describe'
-alias ke='kubectl exec -it'
-alias kdp='kubectl delete pod'
-alias kshowctx='kubectl config get-contexts'
+alias kg="kubectl get"
+alias kd="kubectl describe"
+alias ke="kubectl exec -it"
+alias kdp="kubectl delete pod"
+alias kctxs="kubectl config get-contexts"
+alias kshowctx="k config current-context"
+alias kshowns="kubectl config view --minify -o jsonpath='{..namespace}'"
 # select k8s cluster/context
 function kc() {
   kubectl config use-context $(kubectl config get-contexts -o name | fzf)
