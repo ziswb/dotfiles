@@ -15,5 +15,8 @@ ZSH_ALIAS_DIR=$HOME/.config/shell
 # DevOpsTools
 [ -f $ZSH_ALIAS_DIR/devopstools.alias ] && source $ZSH_ALIAS_DIR/devopstools.alias
 
-alias dotfiles="/usr/bin/git --git-dir=/Users/bziswiler/.dotfiles/ --work-tree=${HOME}"
+# ColorLS
+[ -f $ZSH_ALIAS_DIR/colorls.alias ] && source $ZSH_ALIAS_DIR/colorls.alias
+
+alias dotfiles="/usr/bin/git --git-dir=${HOME}/.dotfiles/ --work-tree=${HOME}"
 
