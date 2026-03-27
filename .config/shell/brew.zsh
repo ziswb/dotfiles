@@ -5,6 +5,7 @@ if type brew &>/dev/null; then
 fi
 
 # Homebrew
-export PATH="/opt/homebrew/bin:$PATH"
-export PATH="/opt/homebrew/opt/helm@3/bin:$PATH"
-eval "$(/opt/homebrew/bin/brew shellenv)"
+export PATH="$(brew --prefix)/bin:$PATH"
+export PATH="$(brew --prefix)/opt/helm@3/bin:$PATH"
+BREW=$(brew --prefix)
+eval "$($BREW/bin/brew shellenv)"
