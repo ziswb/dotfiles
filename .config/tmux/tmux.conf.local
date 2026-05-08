@@ -1,10 +1,15 @@
 # Prefix: Ctrl-a (instead of Ctrl-b)
-set -g prefix C-a
+set -g prefix C-s
 unbind C-b
-bind C-a send-prefix
+bind C-s send-prefix
 
 # Mouse support
 set -g mouse on
+setw -g mode-keys vi
+
+# Keep text selection and copy/paste working
+bind-key -T copy-mode-vi MouseDragEnd1Pane send-keys -X copy-pipe-and-cancel "pbcopy"
+bind-key -T copy-mode-vi y send-keys -X copy-pipe-and-cancel "pbcopy"
 
 # Better splits
 bind | split-window -h
