@@ -1,0 +1,38 @@
+# Based on https://akrabat.com/openconnect-on-mac/
+
+function vpn-up() {
+  local VPN_HOST="https://remote.ergon.ch:30001"
+  local VPN_USER="brunozi"
+  local OP_ACCOUNT="ergon.1password.eu"
+  local OP_VAULT="Employee"
+  local OP_ITEM="Ergon VPN"
+
+  if ! command -v op &> /dev/null; then
+    echo "Error: 1Password CLI (op) not found. Install it with: brew install --cask 1password-cli"
+    return 1
+  fi
+
+  local VPN_PASSWORD
+  VPN_PASSWORD=$(op read "op://${OP_VAULT}/${OP_ITEM}/password" --account "$OP_ACCOUNT" 2>&1)
+
+  if [ $? -ne 0 ] || [ -z "$VPN_PASSWORD" ]; then
+    echo "Error: could not retrieve VPN password from 1Password"
+    echo "$VPN_PASSWORD"
+    return 1
+  fi
+
+  echo "Starting the vpn ..."
+  echo "$VPN_PASSWORD" | sudo openconnect \
+    --background \
+    --passwd-on-stdin \
+    --protocol=gp \
+    --usergroup=gateway \
+    --reconnect-timeout 60 \
+    --pfs \
+    --user="$VPN_USER" \
+    "$VPN_HOST"
+}
+
+function vpn-down() {
+  sudo kill -2 $(pgrep openconnect)
+}

@@ -1,5 +1,5 @@
 ### MANAGED BY RANCHER DESKTOP START (DO NOT EDIT)
-export PATH="$HOME/.rd/bin:$PATH"
+export PATH="/Users/brunozi/.rd/bin:$PATH"
 ### MANAGED BY RANCHER DESKTOP END (DO NOT EDIT)
 
 ZSH_CONFIG_DIR=$HOME/.config/shell
@@ -39,6 +39,9 @@ ZSH_CONFIG_DIR=$HOME/.config/shell
 
 # PostgreSQL
 [ -f $ZSH_CONFIG_DIR/postgres.zsh ] && source $ZSH_CONFIG_DIR/postgres.zsh
+
+# VPN
+[ -f $ZSH_CONFIG_DIR/vpn.zsh ] && source $ZSH_CONFIG_DIR/vpn.zsh
 
 # Optional local overrides (per machine)
 [ -f $ZSH_CONFIG_DIR/local.zsh ] && source $ZSH_CONFIG_DIR/local.zsh
