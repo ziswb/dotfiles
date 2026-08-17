@@ -1,11 +1,17 @@
 # Based on https://akrabat.com/openconnect-on-mac/
 
+function _vpn_enabled_services() {
+  # List enabled network services (skip the disabled ones, marked with *)
+  networksetup -listallnetworkservices | sed '1d' | grep -v '^\*'
+}
+
 function vpn-up() {
   local VPN_HOST="https://remote.ergon.ch:30001"
   local VPN_USER="brunozi"
   local OP_ACCOUNT="ergon.1password.eu"
   local OP_VAULT="Employee"
   local OP_ITEM="Ergon VPN"
+  local DNS_BACKUP_DIR="/tmp/.vpn_dns_backup"
 
   if ! command -v op &> /dev/null; then
     echo "Error: 1Password CLI (op) not found. Install it with: brew install --cask 1password-cli"
@@ -21,6 +27,18 @@ function vpn-up() {
     return 1
   fi
 
+  # Snapshot DNS settings for ALL enabled network services (Wi-Fi, LAN, etc.)
+  # so that no matter which interface is active when we disconnect later,
+  # we can restore every one of them back to its pre-VPN state.
+  rm -rf "$DNS_BACKUP_DIR"
+  mkdir -p "$DNS_BACKUP_DIR"
+  while IFS= read -r service; do
+    [ -z "$service" ] && continue
+    local safe_name
+    safe_name=$(echo "$service" | tr '/ ' '__')
+    networksetup -getdnsservers "$service" > "${DNS_BACKUP_DIR}/${safe_name}"
+  done < <(_vpn_enabled_services)
+
   echo "Starting the vpn ..."
   echo "$VPN_PASSWORD" | sudo openconnect \
     --background \
@@ -34,5 +52,35 @@ function vpn-up() {
 }
 
 function vpn-down() {
-  sudo kill -2 $(pgrep openconnect)
+  local DNS_BACKUP_DIR="/tmp/.vpn_dns_backup"
+
+  sudo kill -2 $(pgrep openconnect) 2>/dev/null
+  sleep 2  # give openconnect's own cleanup a moment to run first
+
+  if [ ! -d "$DNS_BACKUP_DIR" ]; then
+    echo "No DNS backup found — nothing to restore."
+    return
+  fi
+
+  while IFS= read -r service; do
+    [ -z "$service" ] && continue
+    local safe_name
+    safe_name=$(echo "$service" | tr '/ ' '__')
+    local backup_file="${DNS_BACKUP_DIR}/${safe_name}"
+
+    [ -f "$backup_file" ] || continue
+
+    local DNS_ENTRIES
+    DNS_ENTRIES=$(cat "$backup_file")
+
+    if echo "$DNS_ENTRIES" | grep -qi "There aren't any DNS Servers"; then
+      echo "Restoring DHCP-provided DNS on $service ..."
+      networksetup -setdnsservers "$service" empty
+    else
+      echo "Restoring original DNS servers on $service ..."
+      networksetup -setdnsservers "$service" $DNS_ENTRIES
+    fi
+  done < <(_vpn_enabled_services)
+
+  rm -rf "$DNS_BACKUP_DIR"
 }
