@@ -1,42 +1,163 @@
+# ---------------------------------------------------------------------------
+# OpenConnect / GlobalProtect VPN helpers for macOS (zsh)
 # Based on https://akrabat.com/openconnect-on-mac/
+#
+# Installation:
+#   cp vpn.zsh ~/.config/zsh/vpn.zsh
+#   echo 'source ~/.config/zsh/vpn.zsh' >> ~/.zshrc
+#
+# Commands:
+#   vpn-up       connect
+#   vpn-down     disconnect + restore DNS + clean up routes
+#   vpn-status   show current state
+#   vpn-doctor   diagnose leftovers after a crash / network change
+#
+# Optional passwordless operation — see /etc/sudoers.d/openconnect:
+#   <user> ALL=(ALL) NOPASSWD: /usr/bin/pkill -INT -x openconnect
+#   <user> ALL=(ALL) NOPASSWD: /usr/bin/pkill -KILL -x openconnect
+#   <user> ALL=(ALL) NOPASSWD: /sbin/route -n delete -host *
+# ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# Configuration (override in .zshrc before sourcing if needed)
+# ---------------------------------------------------------------------------
+: ${VPN_HOSTNAME:="remote.ergon.ch"}
+: ${VPN_PORT:="30001"}
+: ${VPN_USER:="brunozi"}
+: ${VPN_OP_ACCOUNT:="ergon.1password.eu"}
+: ${VPN_OP_VAULT:="Employee"}
+: ${VPN_OP_ITEM:="Ergon VPN"}
+: ${VPN_STATE_DIR:="${HOME}/.cache/vpn"}
+
+# ---------------------------------------------------------------------------
+# Internal helpers
+# ---------------------------------------------------------------------------
+
+# List enabled network services (skip disabled ones, marked with *)
 function _vpn_enabled_services() {
-  # List enabled network services (skip the disabled ones, marked with *)
   networksetup -listallnetworkservices | sed '1d' | grep -v '^\*'
 }
 
+function _vpn_pids() {
+  local -a pids
+  pids=(${(f)"$(pgrep -x openconnect 2>/dev/null)"})
+  pids=(${pids:#})
+  print -r -- ${pids}
+}
+
+# Resolve all A records. macOS has dropped `dig` from the base system in some
+# releases, so fall back to dscacheutil, which is always present.
+function _vpn_resolve_ips() {
+  local hostname="$1"
+  if command -v dig &> /dev/null; then
+    dig +short "$hostname" A 2>/dev/null | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$'
+  else
+    dscacheutil -q host -a name "$hostname" 2>/dev/null | awk '/^ip_address:/ {print $2}'
+  fi
+}
+
+# The gateway IPs we saw at connect time. DNS may look completely different
+# after a network change, so the cached list is the authoritative one.
+function _vpn_known_gateway_ips() {
+  local -a ips
+  [[ -f "${VPN_STATE_DIR}/gateway_ips" ]] && ips=(${(f)"$(<${VPN_STATE_DIR}/gateway_ips)"})
+  ips+=(${(f)"$(_vpn_resolve_ips "$VPN_HOSTNAME")"})
+  ips=(${ips:#})
+  print -r -- ${(u)ips}   # (u) = unique
+}
+
+# Remove host routes to the VPN gateway that vpnc-script failed to clean up.
+# This happens whenever openconnect dies without a clean shutdown, or when the
+# default gateway changed (office <-> home office) while the tunnel was up:
+# vpnc-script then tries to delete the route via a gateway that no longer
+# exists, silently fails, and the stale route stays behind. Any later connect
+# attempt then dies with "Can't assign requested address" (EADDRNOTAVAIL).
+function _vpn_cleanup_routes() {
+  local -a ips
+  ips=(${(f)"$(_vpn_known_gateway_ips)"})
+
+  local ip found=0
+  for ip in $ips; do
+    if netstat -rn -f inet 2>/dev/null | awk '{print $1}' | grep -qx "$ip"; then
+      echo "  Removing stale host route to ${ip} ..."
+      sudo /sbin/route -n delete -host "$ip" > /dev/null 2>&1
+      found=1
+    fi
+  done
+
+  [[ $found -eq 0 ]] && echo "  No stale host routes found."
+  return 0
+}
+
+# ---------------------------------------------------------------------------
+# vpn-up
+# ---------------------------------------------------------------------------
 function vpn-up() {
-  local VPN_HOST="https://remote.ergon.ch:30001"
-  local VPN_USER="brunozi"
-  local OP_ACCOUNT="ergon.1password.eu"
-  local OP_VAULT="Employee"
-  local OP_ITEM="Ergon VPN"
-  local DNS_BACKUP_DIR="/tmp/.vpn_dns_backup"
+  local VPN_HOST="https://${VPN_HOSTNAME}:${VPN_PORT}"
+  local DNS_BACKUP_DIR="${VPN_STATE_DIR}/dns"
 
   if ! command -v op &> /dev/null; then
     echo "Error: 1Password CLI (op) not found. Install it with: brew install --cask 1password-cli"
     return 1
   fi
 
-  local VPN_PASSWORD
-  VPN_PASSWORD=$(op read "op://${OP_VAULT}/${OP_ITEM}/password" --account "$OP_ACCOUNT" 2>&1)
+  if ! command -v openconnect &> /dev/null; then
+    echo "Error: openconnect not found. Install it with: brew install openconnect"
+    return 1
+  fi
 
-  if [ $? -ne 0 ] || [ -z "$VPN_PASSWORD" ]; then
+  # Refuse to stack sessions. A second vpnc-script run overwrites the state in
+  # /var/run/vpnc/, which makes the first session's routes unremovable.
+  local -a running
+  running=(${(f)"$(_vpn_pids)"})
+  running=(${running:#})
+  if (( ${#running} > 0 )); then
+    echo "Error: openconnect is already running (PID: ${running})."
+    echo "Run 'vpn-down' first, or 'vpn-status' to inspect."
+    return 1
+  fi
+
+  # No `sudo -v` here: sudo reads its password from the terminal, not from
+  # stdin, so it does not collide with the piped VPN password below.
+
+  # Preflight cleanup: makes this idempotent regardless of how badly the
+  # previous session ended (crash, sleep/wake, dock unplugged, ...).
+  echo "Checking for leftovers from previous sessions ..."
+  _vpn_cleanup_routes
+
+  local VPN_PASSWORD
+  VPN_PASSWORD=$(op read "op://${VPN_OP_VAULT}/${VPN_OP_ITEM}/password" --account "$VPN_OP_ACCOUNT" 2>&1)
+
+  if [[ $? -ne 0 || -z "$VPN_PASSWORD" ]]; then
     echo "Error: could not retrieve VPN password from 1Password"
     echo "$VPN_PASSWORD"
     return 1
   fi
 
-  # Snapshot DNS settings for ALL enabled network services (Wi-Fi, LAN, etc.)
-  # so that no matter which interface is active when we disconnect later,
-  # we can restore every one of them back to its pre-VPN state.
+  mkdir -p "$VPN_STATE_DIR"
+
+  # Cache the gateway IPs so vpn-down can clean up even if DNS is unusable
+  # or resolves differently by then.
+  _vpn_resolve_ips "$VPN_HOSTNAME" > "${VPN_STATE_DIR}/gateway_ips"
+  if [[ ! -s "${VPN_STATE_DIR}/gateway_ips" ]]; then
+    echo "Warning: could not resolve ${VPN_HOSTNAME} — continuing anyway."
+  fi
+
+  # Snapshot DNS settings for ALL enabled network services (Wi-Fi, LAN, ...)
+  # so that no matter which interface is active when we disconnect later, we
+  # can restore every one of them to its pre-VPN state. The real service name
+  # goes on line 1 so restoring does not depend on the mangled filename or on
+  # the service still being enabled.
   rm -rf "$DNS_BACKUP_DIR"
   mkdir -p "$DNS_BACKUP_DIR"
+  local service safe_name
   while IFS= read -r service; do
-    [ -z "$service" ] && continue
-    local safe_name
+    [[ -z "$service" ]] && continue
     safe_name=$(echo "$service" | tr '/ ' '__')
-    networksetup -getdnsservers "$service" > "${DNS_BACKUP_DIR}/${safe_name}"
+    {
+      print -r -- "$service"
+      networksetup -getdnsservers "$service"
+    } > "${DNS_BACKUP_DIR}/${safe_name}"
   done < <(_vpn_enabled_services)
 
   echo "Starting the vpn ..."
@@ -47,40 +168,170 @@ function vpn-up() {
     --usergroup=gateway \
     --reconnect-timeout 60 \
     --pfs \
+    --syslog \
     --user="$VPN_USER" \
     "$VPN_HOST"
+
+  local rc=$?
+  if [[ $rc -ne 0 ]]; then
+    echo "openconnect exited with status ${rc}."
+    echo "Run 'vpn-doctor' to check for leftovers, or inspect the log with:"
+    echo "  log stream --predicate 'process == \"openconnect\"'"
+    return $rc
+  fi
 }
 
+# ---------------------------------------------------------------------------
+# vpn-down
+# ---------------------------------------------------------------------------
 function vpn-down() {
-  local DNS_BACKUP_DIR="/tmp/.vpn_dns_backup"
+  local DNS_BACKUP_DIR="${VPN_STATE_DIR}/dns"
 
-  sudo kill -2 $(pgrep openconnect) 2>/dev/null
-  sleep 2  # give openconnect's own cleanup a moment to run first
+  local -a pids
+  pids=(${(f)"$(_vpn_pids)"})
+  pids=(${pids:#})
 
-  if [ ! -d "$DNS_BACKUP_DIR" ]; then
-    echo "No DNS backup found — nothing to restore."
-    return
+  if (( ${#pids} > 0 )); then
+    echo "Stopping openconnect (PID: ${pids}) ..."
+    # Fixed arguments and absolute path so this can be whitelisted in sudoers
+    # exactly as written — no wildcards, no PID list that would require one.
+    sudo /usr/bin/pkill -INT -x openconnect
+
+    # Wait for the process to actually finish instead of guessing with sleep.
+    # vpnc-script needs this window to tear down routes and DNS; if the
+    # gateway is unreachable the logout can take well over two seconds.
+    local i=0
+    while (( ${#${(f)"$(_vpn_pids)"}:#} > 0 )) && (( i < 15 )); do
+      sleep 1
+      (( i++ ))
+    done
+
+    pids=(${(f)"$(_vpn_pids)"})
+    pids=(${pids:#})
+    if (( ${#pids} > 0 )); then
+      echo "openconnect did not respond to SIGINT — forcing termination."
+      sudo /usr/bin/pkill -KILL -x openconnect
+      sleep 1
+    fi
+  else
+    echo "No running openconnect process."
   fi
 
-  while IFS= read -r service; do
-    [ -z "$service" ] && continue
-    local safe_name
-    safe_name=$(echo "$service" | tr '/ ' '__')
-    local backup_file="${DNS_BACKUP_DIR}/${safe_name}"
+  echo "Cleaning up routes ..."
+  _vpn_cleanup_routes
 
-    [ -f "$backup_file" ] || continue
+  if [[ ! -d "$DNS_BACKUP_DIR" ]]; then
+    echo "No DNS backup found — nothing to restore."
+    return 0
+  fi
 
-    local DNS_ENTRIES
-    DNS_ENTRIES=$(cat "$backup_file")
+  local backup_file service dns_entries
+  for backup_file in "${DNS_BACKUP_DIR}"/*(.N); do
+    service=$(head -n 1 "$backup_file")
+    dns_entries=$(tail -n +2 "$backup_file")
 
-    if echo "$DNS_ENTRIES" | grep -qi "There aren't any DNS Servers"; then
-      echo "Restoring DHCP-provided DNS on $service ..."
+    [[ -z "$service" ]] && continue
+
+    if ! networksetup -getdnsservers "$service" &> /dev/null; then
+      echo "Service '${service}' no longer exists — skipped."
+      continue
+    fi
+
+    # NOTE: ${=var} forces word splitting. Unlike bash, zsh does not split
+    # unquoted parameter expansions, so a plain $dns_entries would pass all
+    # servers as a single argument.
+    if print -r -- "$dns_entries" | grep -qi "There aren't any DNS Servers"; then
+      echo "Restoring DHCP-provided DNS on ${service} ..."
       networksetup -setdnsservers "$service" empty
     else
-      echo "Restoring original DNS servers on $service ..."
-      networksetup -setdnsservers "$service" $DNS_ENTRIES
+      echo "Restoring original DNS servers on ${service} ..."
+      networksetup -setdnsservers "$service" ${=dns_entries}
     fi
-  done < <(_vpn_enabled_services)
+  done
 
   rm -rf "$DNS_BACKUP_DIR"
+  rm -f "${VPN_STATE_DIR}/gateway_ips"
+  echo "Done."
+}
+
+# ---------------------------------------------------------------------------
+# vpn-status
+# ---------------------------------------------------------------------------
+function vpn-status() {
+  local -a pids
+  pids=(${(f)"$(_vpn_pids)"})
+  pids=(${pids:#})
+
+  if (( ${#pids} > 0 )); then
+    echo "openconnect: running (PID: ${pids})"
+  else
+    echo "openconnect: not running"
+  fi
+
+  local -a tunnels
+  tunnels=(${(f)"$(ifconfig -l | tr ' ' '\n' | grep '^utun')"})
+  local iface addr
+  for iface in $tunnels; do
+    addr=$(ifconfig "$iface" 2>/dev/null | awk '/inet /{print $2; exit}')
+    printf "  %-8s %s\n" "$iface" "${addr:-<no IPv4>}"
+  done
+
+  echo "default route:"
+  route -n get default 2>/dev/null | awk '/gateway|interface/{print "  " $0}' \
+    || echo "  none"
+}
+
+# ---------------------------------------------------------------------------
+# vpn-doctor
+# ---------------------------------------------------------------------------
+function vpn-doctor() {
+  echo "== Gateway routes =="
+  local -a ips
+  ips=(${(f)"$(_vpn_known_gateway_ips)"})
+  if (( ${#ips} == 0 )); then
+    echo "  Could not determine gateway IPs (DNS failure?)."
+  fi
+  local ip
+  for ip in $ips; do
+    if netstat -rn -f inet 2>/dev/null | awk '{print $1}' | grep -qx "$ip"; then
+      echo "  STALE host route present for ${ip}"
+      netstat -rn -f inet | awk -v ip="$ip" '$1 == ip {print "    " $0}'
+    else
+      echo "  ok — no host route for ${ip}"
+    fi
+  done
+
+  echo "== Tunnel interfaces =="
+  local iface found=0
+  for iface in ${(f)"$(ifconfig -l | tr ' ' '\n' | grep '^utun')"}; do
+    if ! ifconfig "$iface" 2>/dev/null | grep -q 'inet '; then
+      echo "  ${iface} exists without an IPv4 address (possible leftover)"
+      found=1
+    fi
+  done
+  [[ $found -eq 0 ]] && echo "  ok — no orphaned utun interfaces"
+
+  echo "== Default route =="
+  local def_iface
+  def_iface=$(route -n get default 2>/dev/null | awk '/interface:/{print $2}')
+  if [[ -z "$def_iface" ]]; then
+    echo "  WARNING: no default route at all"
+  elif [[ "$def_iface" == utun* ]]; then
+    echo "  WARNING: default route still points into the tunnel (${def_iface})"
+    echo "  Toggle Wi-Fi/Ethernet off and on, or reconnect and disconnect cleanly."
+  else
+    echo "  ok — default route via ${def_iface}"
+  fi
+
+  echo "== Reachability =="
+  for ip in $ips; do
+    if nc -z -G 5 "$ip" "$VPN_PORT" 2>/dev/null; then
+      echo "  ok — ${ip}:${VPN_PORT} reachable"
+    else
+      echo "  ${ip}:${VPN_PORT} NOT reachable"
+    fi
+  done
+
+  echo
+  echo "Run 'vpn-down' to clean up, then 'vpn-up' to reconnect."
 }
