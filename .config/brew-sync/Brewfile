@@ -1,0 +1,135 @@
+tap "anomalyco/tap"
+tap "blendle/blendle", trusted: true
+# Cryptography and SSL/TLS Toolkit
+brew "openssl@3"
+# Automate deployment, configuration, and upgrading
+brew "ansible"
+# Improved shell history for zsh, bash, fish and nushell
+brew "atuin"
+# Automatic configure script builder
+brew "autoconf"
+# Tool for generating GNU Standards-compliant Makefiles
+brew "automake"
+# Microsoft Azure CLI 2.0
+brew "azure-cli"
+# Resource monitor. C++ version and continuation of bashtop and bpytop
+brew "btop"
+# GNU File, Shell, and Text utilities
+brew "coreutils"
+# File comparison utilities
+brew "diffutils"
+# Load/unload environment variables based on $PWD
+brew "direnv"
+# Tool for exploring each layer in a docker image
+brew "dive"
+# Lock file during command
+brew "flock"
+# GNU implementation of the famous stream editor
+brew "gnu-sed"
+# GNU version of the tar archiving utility
+brew "gnu-tar"
+# Fast linters runner for Go
+brew "golangci-lint"
+# Open-source build automation tool based on the Groovy and Kotlin DSL
+brew "gradle"
+# GNU grep, egrep and fgrep
+brew "grep"
+# Popular GNU data compression program
+brew "gzip"
+# Access DVDs as block devices without the decryption
+brew "libdvdcss"
+# Open-source video transcoder available for Linux, Mac, and Windows
+brew "handbrake"
+# Kubernetes package manager
+brew "helm@3"
+# Improved top (interactive process viewer)
+brew "htop"
+# Lightweight and flexible command-line JSON processor
+brew "jq"
+# Kubernetes CLI To Manage Your Clusters In Style!
+brew "k9s"
+# Environment diagnostics for Kotlin Multiplatform Mobile app development
+brew "kdoctor"
+# Colorize your kubectl output
+brew "kubecolor"
+# Kubernetes command-line interface
+brew "kubernetes-cli"
+# Template-free customization of Kubernetes YAML manifests
+brew "kustomize"
+# Postgres C API library
+brew "libpq", link: true
+# Generic library support script
+brew "libtool"
+# Library for USB device access
+brew "libusb-compat"
+# Open-source, cross-platform JavaScript runtime environment
+brew "node"
+# Manage multiple Node.js versions
+brew "nvm"
+# Package compiler and linker metadata toolkit
+brew "pkgconf"
+# Rsync for cloud storage
+brew "rclone"
+# Utility that provides fast incremental file transfer
+brew "rsync"
+# Powerful, clean, object-oriented scripting language
+brew "ruby"
+# Work with remote images registries
+brew "skopeo"
+# Generate type safe Go from SQL
+brew "sqlc"
+# Tail multiple Kubernetes pods & their containers
+brew "stern"
+# User interface to the TELNET protocol
+brew "telnet"
+# Thin wrapper for Terraform e.g. for locking state
+brew "terragrunt"
+# Define your dev environment as code. For microservice apps on Kubernetes
+brew "tilt"
+# Terminal multiplexer
+brew "tmux"
+# Extremely fast Python package installer and resolver, written in Rust
+brew "uv"
+# Internet file retriever
+brew "wget"
+# General-purpose lossless data-compression library
+brew "zlib"
+# The AI coding agent built for the terminal.
+brew "anomalyco/tap/opencode", trusted: true
+# Quick Kubernetes Namespace and Context Switchers
+brew "blendle/blendle/kns"
+# Command-line interface for 1Password
+cask "1password-cli"
+# Tool to flash OS images to SD cards & USB drives
+cask "balenaetcher"
+# OpenAI's coding agent that runs in your terminal
+cask "codex"
+# Browser for SQLite databases
+cask "db-browser-for-sqlite"
+# Waterfall-style image viewer
+cask "flowvision"
+# Kext-less implementation of FUSE
+cask "fuse-t"
+# Tool to show what is persistently installed on the computer
+cask "knockknock"
+# Privacy-first, open-source platform for knowledge sharing and management
+cask "logseq"
+# File system integration
+cask "macfuse"
+# Visual diff and merge tool
+cask "meld"
+# Mux and tag mp4 files
+cask "subler"
+# Native GUI for Homebrew package management
+cask "taphouse"
+# JDK from the Eclipse Foundation (Adoptium)
+cask "temurin"
+# JDK from the Eclipse Foundation (Adoptium)
+cask "temurin@21"
+# JDK from the Eclipse Foundation (Adoptium)
+cask "temurin@25"
+# Multimedia player
+cask "vlc"
+uv "mlx-lm"
+npm "@angular/cli"
+npm "@qwen-code/qwen-code"
