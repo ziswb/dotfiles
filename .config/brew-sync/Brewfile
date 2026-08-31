@@ -54,8 +54,6 @@ brew "kdoctor"
 brew "kubecolor"
 # Kubernetes command-line interface
 brew "kubernetes-cli"
-# Template-free customization of Kubernetes YAML manifests
-brew "kustomize"
 # Postgres C API library
 brew "libpq", link: true
 # Generic library support script
@@ -82,8 +80,6 @@ brew "sqlc"
 brew "stern"
 # User interface to the TELNET protocol
 brew "telnet"
-# Thin wrapper for Terraform e.g. for locking state
-brew "terragrunt"
 # Define your dev environment as code. For microservice apps on Kubernetes
 brew "tilt"
 # Terminal multiplexer
@@ -104,8 +100,6 @@ cask "1password-cli"
 cask "balenaetcher"
 # OpenAI's coding agent that runs in your terminal
 cask "codex"
-# Browser for SQLite databases
-cask "db-browser-for-sqlite"
 # Waterfall-style image viewer
 cask "flowvision"
 # Kext-less implementation of FUSE
@@ -118,8 +112,6 @@ cask "logseq"
 cask "macfuse"
 # Visual diff and merge tool
 cask "meld"
-# Mux and tag mp4 files
-cask "subler"
 # Native GUI for Homebrew package management
 cask "taphouse"
 # JDK from the Eclipse Foundation (Adoptium)
